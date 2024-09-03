@@ -5,6 +5,7 @@ mod storage;
 
 use app::{App, AppResult};
 use chrono::NaiveDate;
+use food::Food;
 use std::io::{self, Write};
 
 fn main() -> AppResult<()> {
@@ -43,9 +44,58 @@ fn main() -> AppResult<()> {
 }
 
 fn add_food(app: &mut App) -> AppResult<()> {
+    println!("Do you want to search for an existing food or enter a new one?");
+    println!("1. Search for existing food");
+    println!("2. Enter new food");
+
+    let choice: usize = read_usize()?;
+
+    let food = match choice {
+        1 => search_and_select_food(app)?,
+        2 => enter_new_food()?,
+        _ => {
+            println!("Invalid choice. Entering new food.");
+            enter_new_food()?
+        }
+    };
+
+    println!("Enter quantity consumed:");
+    let quantity: f32 = read_float()?;
+
+    app.add_food(food, quantity)?;
+    println!("Food added successfully!");
+    Ok(())
+}
+
+fn search_and_select_food(app: &App) -> AppResult<Food> {
+    println!("Enter food name to search:");
+    let query = read_line()?;
+
+    let results = app.search_food(&query);
+
+    if results.is_empty() {
+        println!("No matching foods found. Please enter a new food.");
+        return enter_new_food();
+    }
+
+    println!("Search results:");
+    for (i, (food, score)) in results.iter().enumerate() {
+        println!("{}. {} (Match score: {})", i + 1, food.name, score);
+    }
+
+    println!("Select a food (enter the number) or 0 to enter a new food:");
+    let choice: usize = read_usize()?;
+
+    if choice == 0 || choice > results.len() {
+        enter_new_food()
+    } else {
+        Ok(results[choice - 1].0.clone())
+    }
+}
+
+fn enter_new_food() -> AppResult<Food> {
     println!("Enter food name:");
-    let mut name = String::new();
-    io::stdin().read_line(&mut name)?;
+    let name = read_line()?;
 
     println!("Enter protein (grams):");
     let protein: f32 = read_float()?;
@@ -56,9 +106,13 @@ fn add_food(app: &mut App) -> AppResult<()> {
     println!("Enter carbs (grams):");
     let carbs: f32 = read_float()?;
 
-    app.add_food(&name.trim(), protein, fat, carbs)?;
-    println!("Food added successfully!");
-    Ok(())
+    Ok(Food::new(&name, protein, fat, carbs, 1.0))
+}
+
+fn read_line() -> AppResult<String> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_string())
 }
 
 fn remove_food(app: &mut App) -> AppResult<()> {
@@ -93,16 +147,20 @@ fn show_current_day(app: &App) -> AppResult<()> {
 
 fn search_food(app: &App) -> AppResult<()> {
     println!("Enter search query:");
-    let mut query = String::new();
-    io::stdin().read_line(&mut query)?;
+    let query = read_line()?;
 
-    let results = app.search_food(query.trim());
+    let results = app.search_food(&query);
     if results.is_empty() {
         println!("No foods found matching the query.");
     } else {
         println!("Search results:");
-        for food in results {
-            println!("- {} ({} calories)", food.name, food.calories());
+        for (food, score) in results {
+            println!(
+                "- {} ({} calories) [Match score: {}]",
+                food.name,
+                food.calories(),
+                score
+            );
         }
     }
     Ok(())
@@ -156,4 +214,3 @@ fn read_usize() -> AppResult<usize> {
     io::stdin().read_line(&mut input)?;
     Ok(input.trim().parse()?)
 }
-

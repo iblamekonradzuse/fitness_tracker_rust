@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
+fuzzy-matcher = "0.3.7"
 serde_json = "1.0"

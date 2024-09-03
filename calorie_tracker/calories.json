@@ -1,2 +1,14 @@
 [
+  {
+    "date": "2024-09-03",
+    "foods": [
+      {
+        "name": "test",
+        "protein": 1.0,
+        "fat": 1.0,
+        "carbs": 1.0,
+        "quantity": 12.0
+      }
+    ]
+  }
 ]

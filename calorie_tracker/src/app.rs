@@ -2,6 +2,8 @@ use crate::day::Day;
 use crate::food::Food;
 use crate::storage::{load_days, save_days};
 use chrono::{Local, NaiveDate};
+use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 use std::error::Error;
 
 pub type AppResult<T> = Result<T, Box<dyn Error>>;
@@ -10,6 +12,7 @@ pub struct App {
     days: Vec<Day>,
     file_path: String,
     current_day_index: usize,
+    matcher: SkimMatcherV2,
 }
 
 impl App {
@@ -22,12 +25,12 @@ impl App {
             days,
             file_path: file_path.to_string(),
             current_day_index: 0,
+            matcher: SkimMatcherV2::default(),
         })
     }
 
-    pub fn add_food(&mut self, name: &str, protein: f32, fat: f32, carbs: f32) -> AppResult<()> {
-        let food = Food::new(name, protein, fat, carbs);
-        self.get_current_day_mut()?.add_food(food);
+    pub fn add_food(&mut self, food: Food, quantity: f32) -> AppResult<()> {
+        self.get_current_day_mut()?.add_food(food, quantity);
         self.save()
     }
 
@@ -36,24 +39,20 @@ impl App {
         self.save()
     }
 
-    pub fn reset_day(&mut self) -> AppResult<()> {
-        self.get_current_day_mut()?.reset();
-        self.save()
-    }
-
-    pub fn register_day(&mut self) -> AppResult<()> {
-        let new_day = Day::new(Local::now().date_naive());
-        self.days.push(new_day);
-        self.current_day_index = self.days.len() - 1;
-        self.save()
-    }
-
-    pub fn search_food(&self, query: &str) -> Vec<&Food> {
+    pub fn search_food(&self, query: &str) -> Vec<(&Food, i64)> {
         self.days
             .iter()
             .flat_map(|day| day.foods.iter())
-            .filter(|food| food.name.to_lowercase().contains(&query.to_lowercase()))
+            .filter_map(|food| {
+                self.matcher
+                    .fuzzy_match(&food.name, query)
+                    .map(|score| (food, score))
+            })
             .collect()
+    }
+
+    pub fn get_all_foods(&self) -> Vec<&Food> {
+        self.days.iter().flat_map(|day| day.foods.iter()).collect()
     }
 
     pub fn change_day(&mut self, date: NaiveDate) -> AppResult<()> {
@@ -102,5 +101,18 @@ impl App {
     fn save(&self) -> AppResult<()> {
         save_days(&self.file_path, &self.days)
     }
-}
+    pub fn reset_day(&mut self) -> AppResult<()> {
+        self.get_current_day_mut()?.reset();
+        self.save()
+    }
 
+    pub fn register_day(&mut self) -> AppResult<()> {
+        let new_date = self.get_current_day()?.date.succ();
+        if !self.days.iter().any(|day| day.date == new_date) {
+            self.days.push(Day::new(new_date));
+            self.current_day_index = self.days.len() - 1;
+            self.save()?;
+        }
+        Ok(())
+    }
+}
