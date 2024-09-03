@@ -4,11 +4,15 @@
     "foods": [
       {
         "name": "test",
-        "protein": 1.0,
-        "fat": 1.0,
-        "carbs": 1.0,
-        "quantity": 12.0
+        "protein": 200.0,
+        "fat": 20.0,
+        "carbs": 10.0,
+        "quantity": 1.0
       }
     ]
+  },
+  {
+    "date": "2024-09-04",
+    "foods": []
   }
 ]

@@ -1,42 +1,44 @@
-mod app;
-mod day;
-mod food;
-mod storage;
-
-use app::{App, AppResult};
+use calorie_tracker::{App, AppResult, Food};
 use chrono::NaiveDate;
-use food::Food;
-use std::io::{self, Write};
+use colored::*;
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 
 fn main() -> AppResult<()> {
     let mut app = App::new("calories.json")?;
 
     loop {
-        println!("\nCalorie Tracker - Day {}", app.current_day());
-        println!("1. Add food");
-        println!("2. Remove food");
-        println!("3. Reset day");
-        println!("4. Register day");
-        println!("5. Show current day");
-        println!("6. Search food");
-        println!("7. Change day");
-        println!("8. Show week calories");
-        println!("9. Exit");
+        println!("\n{}", "🍏 Calorie Tracker 🍎".green().bold());
+        println!("{}", format!("Day {}", app.current_day()).cyan());
 
-        let mut choice = String::new();
-        io::stdin().read_line(&mut choice)?;
+        let choices = vec![
+            "Add food",
+            "Remove food",
+            "Reset day",
+            "Register day",
+            "Show current day",
+            "Search food",
+            "Change day",
+            "Show week calories",
+            "Exit",
+        ];
 
-        match choice.trim() {
-            "1" => add_food(&mut app)?,
-            "2" => remove_food(&mut app)?,
-            "3" => app.reset_day()?,
-            "4" => app.register_day()?,
-            "5" => show_current_day(&app)?,
-            "6" => search_food(&app)?,
-            "7" => change_day(&mut app)?,
-            "8" => show_week_calories(&app)?,
-            "9" => break,
-            _ => println!("Invalid choice, please try again."),
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Choose an option")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => add_food(&mut app)?,
+            1 => remove_food(&mut app)?,
+            2 => reset_day(&mut app)?,
+            3 => register_day(&mut app)?,
+            4 => show_current_day(&app)?,
+            5 => search_food(&app)?,
+            6 => change_day(&mut app)?,
+            7 => show_week_calories(&app)?,
+            8 => break,
+            _ => unreachable!(),
         }
     }
 
@@ -44,122 +46,151 @@ fn main() -> AppResult<()> {
 }
 
 fn add_food(app: &mut App) -> AppResult<()> {
-    println!("Do you want to search for an existing food or enter a new one?");
-    println!("1. Search for existing food");
-    println!("2. Enter new food");
+    let choices = vec!["Search for existing food", "Enter new food"];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Do you want to search for an existing food or enter a new one?")
+        .default(0)
+        .items(&choices)
+        .interact()?;
 
-    let choice: usize = read_usize()?;
-
-    let food = match choice {
-        1 => search_and_select_food(app)?,
-        2 => enter_new_food()?,
-        _ => {
-            println!("Invalid choice. Entering new food.");
-            enter_new_food()?
-        }
+    let food = match selection {
+        0 => search_and_select_food(app)?,
+        1 => enter_new_food()?,
+        _ => unreachable!(),
     };
 
-    println!("Enter quantity consumed:");
-    let quantity: f32 = read_float()?;
+    let quantity: f32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter quantity consumed")
+        .interact_text()?;
 
     app.add_food(food, quantity)?;
-    println!("Food added successfully!");
+    println!("{}", "Food added successfully!".green());
     Ok(())
 }
 
 fn search_and_select_food(app: &App) -> AppResult<Food> {
-    println!("Enter food name to search:");
-    let query = read_line()?;
+    let query: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter food name to search")
+        .interact_text()?;
 
     let results = app.search_food(&query);
 
     if results.is_empty() {
-        println!("No matching foods found. Please enter a new food.");
+        println!(
+            "{}",
+            "No matching foods found. Please enter a new food.".yellow()
+        );
         return enter_new_food();
     }
 
-    println!("Search results:");
-    for (i, (food, score)) in results.iter().enumerate() {
-        println!("{}. {} (Match score: {})", i + 1, food.name, score);
-    }
+    println!("{}", "Search results:".cyan());
+    let choices: Vec<String> = results
+        .iter()
+        .enumerate()
+        .map(|(i, (food, score))| format!("{}. {} (Match score: {})", i + 1, food.name, score))
+        .collect();
 
-    println!("Select a food (enter the number) or 0 to enter a new food:");
-    let choice: usize = read_usize()?;
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select a food or choose 'Enter new food'")
+        .default(0)
+        .items(&choices)
+        .item("Enter new food")
+        .interact()?;
 
-    if choice == 0 || choice > results.len() {
+    if selection == choices.len() {
         enter_new_food()
     } else {
-        Ok(results[choice - 1].0.clone())
+        Ok(results[selection].0.clone())
     }
 }
 
 fn enter_new_food() -> AppResult<Food> {
-    println!("Enter food name:");
-    let name = read_line()?;
+    let name: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter food name")
+        .interact_text()?;
 
-    println!("Enter protein (grams):");
-    let protein: f32 = read_float()?;
+    let protein: f32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter protein (grams)")
+        .interact_text()?;
 
-    println!("Enter fat (grams):");
-    let fat: f32 = read_float()?;
+    let fat: f32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter fat (grams)")
+        .interact_text()?;
 
-    println!("Enter carbs (grams):");
-    let carbs: f32 = read_float()?;
+    let carbs: f32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter carbs (grams)")
+        .interact_text()?;
 
     Ok(Food::new(&name, protein, fat, carbs, 1.0))
 }
 
-fn read_line() -> AppResult<String> {
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input.trim().to_string())
-}
-
 fn remove_food(app: &mut App) -> AppResult<()> {
     let day = app.get_current_day()?;
-    println!("Current foods:");
-    for (i, food) in day.foods.iter().enumerate() {
-        println!("{}. {} ({} calories)", i + 1, food.name, food.calories());
-    }
+    println!("{}", "Current foods:".cyan());
+    let choices: Vec<String> = day
+        .foods
+        .iter()
+        .enumerate()
+        .map(|(i, food)| format!("{}. {} ({} calories)", i + 1, food.name, food.calories()))
+        .collect();
 
-    println!("Enter the number of the food to remove:");
-    let index: usize = read_usize()?;
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select a food to remove")
+        .default(0)
+        .items(&choices)
+        .interact()?;
 
-    if index > 0 && index <= day.foods.len() {
-        app.remove_food(index - 1)?;
-        println!("Food removed successfully!");
-    } else {
-        println!("Invalid food number.");
-    }
+    app.remove_food(selection)?;
+    println!("{}", "Food removed successfully!".green());
+    Ok(())
+}
+
+fn reset_day(app: &mut App) -> AppResult<()> {
+    app.reset_day()?;
+    println!("{}", "Day reset successfully!".green());
+    Ok(())
+}
+
+fn register_day(app: &mut App) -> AppResult<()> {
+    app.register_day()?;
+    println!("{}", "New day registered successfully!".green());
     Ok(())
 }
 
 fn show_current_day(app: &App) -> AppResult<()> {
     let day = app.get_current_day()?;
-    println!("Current day: {}", day.date);
-    println!("Total calories: {}", day.total_calories());
-    println!("Foods consumed:");
+    println!("{}", format!("Current day: {}", day.date).cyan());
+    println!(
+        "{}",
+        format!("Total calories: {}", day.total_calories()).yellow()
+    );
+    println!("{}", "Foods consumed:".cyan());
     for food in &day.foods {
-        println!("- {} ({} calories)", food.name, food.calories());
+        println!(
+            "- {} ({} calories)",
+            food.name.green(),
+            food.calories().to_string().yellow()
+        );
     }
     Ok(())
 }
 
 fn search_food(app: &App) -> AppResult<()> {
-    println!("Enter search query:");
-    let query = read_line()?;
+    let query: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter search query")
+        .interact_text()?;
 
     let results = app.search_food(&query);
     if results.is_empty() {
-        println!("No foods found matching the query.");
+        println!("{}", "No foods found matching the query.".yellow());
     } else {
-        println!("Search results:");
+        println!("{}", "Search results:".cyan());
         for (food, score) in results {
             println!(
                 "- {} ({} calories) [Match score: {}]",
-                food.name,
-                food.calories(),
-                score
+                food.name.green(),
+                food.calories().to_string().yellow(),
+                score.to_string().cyan()
             );
         }
     }
@@ -167,50 +198,44 @@ fn search_food(app: &App) -> AppResult<()> {
 }
 
 fn change_day(app: &mut App) -> AppResult<()> {
-    println!("Enter date (YYYY-MM-DD):");
-    let mut date_str = String::new();
-    io::stdin().read_line(&mut date_str)?;
+    let date_str: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter date (YYYY-MM-DD)")
+        .interact_text()?;
 
-    match NaiveDate::parse_from_str(date_str.trim(), "%Y-%m-%d") {
+    match NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
         Ok(date) => {
             app.change_day(date)?;
-            println!("Changed to day: {}", date);
+            println!("{}", format!("Changed to day: {}", date).green());
         }
-        Err(_) => println!("Invalid date format. Please use YYYY-MM-DD."),
+        Err(_) => println!("{}", "Invalid date format. Please use YYYY-MM-DD.".red()),
     }
     Ok(())
 }
 
 fn show_week_calories(app: &App) -> AppResult<()> {
     let week_calories = app.get_week_calories();
-    println!("Calories consumed in the last 7 days:");
+    println!("{}", "Calories consumed in the last 7 days:".cyan());
     for &(date, calories) in &week_calories {
-        println!("{}: {} calories", date, calories);
+        println!(
+            "{}: {} calories",
+            date.to_string().green(),
+            calories.to_string().yellow()
+        );
     }
 
-    // Create a simple ASCII graph
     let max_calories = week_calories.iter().map(|(_, c)| *c).max().unwrap_or(0);
     let scale = 50.0 / max_calories as f32;
 
-    println!("\nWeek Calorie Graph:");
+    println!("\n{}", "Week Calorie Graph:".cyan());
     for &(date, calories) in &week_calories {
         let bar_length = (calories as f32 * scale).round() as usize;
-        print!("{}: ", date);
-        io::stdout().write_all(&vec!['#' as u8; bar_length])?;
-        println!(" {}", calories);
+        print!("{}: ", date.to_string().green());
+        print!("{}", "█".repeat(bar_length).yellow());
+        println!(" {}", calories.to_string().yellow());
     }
 
     Ok(())
 }
 
-fn read_float() -> AppResult<f32> {
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input.trim().parse()?)
-}
 
-fn read_usize() -> AppResult<usize> {
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input.trim().parse()?)
-}
+

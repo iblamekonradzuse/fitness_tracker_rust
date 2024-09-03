@@ -105,9 +105,9 @@ impl App {
         self.get_current_day_mut()?.reset();
         self.save()
     }
-
     pub fn register_day(&mut self) -> AppResult<()> {
-        let new_date = self.get_current_day()?.date.succ();
+        let current_date = self.get_current_day()?.date;
+        let new_date = current_date.succ_opt().ok_or("Failed to get next date")?;
         if !self.days.iter().any(|day| day.date == new_date) {
             self.days.push(Day::new(new_date));
             self.current_day_index = self.days.len() - 1;
