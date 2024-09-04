@@ -1,4 +1,4 @@
-use calorie_tracker::{App, AppResult, Food};
+use calorie_tracker::{App, AppResult, Food, Gender};
 use chrono::NaiveDate;
 use colored::*;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
@@ -31,6 +31,9 @@ fn main() -> AppResult<()> {
             "🔍 Search food",
             "📆 Change day",
             "📈 Show week calories",
+            "👤 Set user info",
+            "📏 Calculate BMI",
+            "🔥 Calculate BMR",
             "❌ Exit",
         ];
 
@@ -49,7 +52,10 @@ fn main() -> AppResult<()> {
             5 => search_food(&app)?,
             6 => change_day(&mut app)?,
             7 => show_week_calories(&app)?,
-            8 => break,
+            8 => set_user_info(&mut app)?,
+            9 => calculate_bmi(&app)?,
+            10 => calculate_bmr(&app)?,
+            11 => break,
             _ => unreachable!(),
         }
     }
@@ -291,6 +297,86 @@ fn show_week_calories(app: &App) -> AppResult<()> {
         print!("{}", "█".repeat(bar_length).yellow());
         println!(" {}", calories.to_string().yellow());
     }
+
+    pause()?;
+    Ok(())
+}
+fn set_user_info(app: &mut App) -> AppResult<()> {
+    let height: f32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter your height (cm)")
+        .interact_text()?;
+
+    let weight: f32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter your weight (kg)")
+        .interact_text()?;
+
+    let age: u32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter your age")
+        .interact_text()?;
+
+    let gender_choices = vec!["Male", "Female"];
+    let gender_selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select your gender")
+        .default(0)
+        .items(&gender_choices)
+        .interact()?;
+
+    let gender = match gender_selection {
+        0 => Gender::Male,
+        1 => Gender::Female,
+        _ => unreachable!(),
+    };
+
+    app.set_user_info(height, weight, age, gender);
+    println!("\n{}", "✅ User information updated successfully!".green());
+    pause()?;
+    Ok(())
+}
+
+fn calculate_bmi(app: &App) -> AppResult<()> {
+    let bmi = app.calculate_bmi();
+    println!("\n{}", format!("Your BMI: {:.2}", bmi).cyan());
+
+    let bmi_category = match bmi {
+        bmi if bmi < 18.5 => "Underweight",
+        bmi if bmi < 25.0 => "Normal weight",
+        bmi if bmi < 30.0 => "Overweight",
+        _ => "Obese",
+    };
+
+    println!("{}", format!("BMI Category: {}", bmi_category).yellow());
+    pause()?;
+    Ok(())
+}
+
+fn calculate_bmr(app: &App) -> AppResult<()> {
+    let bmr = app.calculate_bmr();
+    println!(
+        "\n{}",
+        format!("Your Basal Metabolic Rate (BMR): {:.2} calories/day", bmr).cyan()
+    );
+
+    println!("\n{}", "Estimated daily calorie needs:".yellow());
+    println!(
+        "Sedentary (little to no exercise): {:.2} calories",
+        bmr * 1.2
+    );
+    println!(
+        "Light exercise (1-3 days/week): {:.2} calories",
+        bmr * 1.375
+    );
+    println!(
+        "Moderate exercise (3-5 days/week): {:.2} calories",
+        bmr * 1.55
+    );
+    println!(
+        "Heavy exercise (6-7 days/week): {:.2} calories",
+        bmr * 1.725
+    );
+    println!(
+        "Very heavy exercise (twice per day): {:.2} calories",
+        bmr * 1.9
+    );
 
     pause()?;
     Ok(())

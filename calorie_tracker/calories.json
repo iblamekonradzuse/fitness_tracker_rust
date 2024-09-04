@@ -4,9 +4,16 @@
     "foods": [
       {
         "name": "test",
-        "protein": 200.0,
-        "fat": 20.0,
-        "carbs": 10.0,
+        "protein": 12.0,
+        "fat": 2.0,
+        "carbs": 4.0,
+        "quantity": 2.0
+      },
+      {
+        "name": "deneme",
+        "protein": 1.0,
+        "fat": 1.0,
+        "carbs": 1.0,
         "quantity": 1.0
       }
     ]

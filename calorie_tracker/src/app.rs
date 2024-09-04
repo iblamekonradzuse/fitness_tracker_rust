@@ -13,6 +13,16 @@ pub struct App {
     file_path: String,
     current_day_index: usize,
     matcher: SkimMatcherV2,
+    user_height: f32, // in centimeters
+    user_weight: f32, // in kilograms
+    user_age: u32,
+    user_gender: Gender,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Gender {
+    Male,
+    Female,
 }
 
 impl App {
@@ -26,6 +36,10 @@ impl App {
             file_path: file_path.to_string(),
             current_day_index: 0,
             matcher: SkimMatcherV2::default(),
+            user_height: 180.0, // Default values
+            user_weight: 79.0,
+            user_age: 22,
+            user_gender: Gender::Male,
         })
     }
 
@@ -114,5 +128,29 @@ impl App {
             self.save()?;
         }
         Ok(())
+    }
+    pub fn set_user_info(&mut self, height: f32, weight: f32, age: u32, gender: Gender) {
+        self.user_height = height;
+        self.user_weight = weight;
+        self.user_age = age;
+        self.user_gender = gender;
+    }
+
+    pub fn calculate_bmi(&self) -> f32 {
+        let height_in_meters = self.user_height / 100.0;
+        self.user_weight / (height_in_meters * height_in_meters)
+    }
+
+    pub fn calculate_bmr(&self) -> f32 {
+        match self.user_gender {
+            Gender::Male => {
+                88.362 + (13.397 * self.user_weight) + (4.799 * self.user_height)
+                    - (5.677 * self.user_age as f32)
+            }
+            Gender::Female => {
+                447.593 + (9.247 * self.user_weight) + (3.098 * self.user_height)
+                    - (4.330 * self.user_age as f32)
+            }
+        }
     }
 }
