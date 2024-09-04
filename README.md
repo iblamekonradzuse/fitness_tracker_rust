@@ -1,4 +1,4 @@
-# 🍏 Calorie Tracker 🏋️
+# 🍏 Fitness Tracker 🏋️
 
 Welcome to **Calorie Tracker** – your all-in-one terminal-based companion for tracking fitness and nutrition. Whether you're aiming to lose weight, build muscle, or maintain a healthy lifestyle, this tool helps you stay on track with precise calculations and insightful data.
 
