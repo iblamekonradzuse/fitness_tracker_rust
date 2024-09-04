@@ -4,6 +4,7 @@ use crate::storage::{load_days, save_days};
 use chrono::{Local, NaiveDate};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 pub type AppResult<T> = Result<T, Box<dyn Error>>;
@@ -23,6 +24,19 @@ pub struct App {
 pub enum Gender {
     Male,
     Female,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkoutType {
+    WeightLifting,
+    Cardio,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Workout {
+    pub workout_type: WorkoutType,
+    pub duration: u32, // in minutes
+    pub calories_burnt: u32,
 }
 
 impl App {
@@ -135,7 +149,25 @@ impl App {
         self.user_age = age;
         self.user_gender = gender;
     }
+    pub fn add_workout(&mut self, workout: Workout) -> AppResult<()> {
+        self.get_current_day_mut()?.add_workout(workout);
+        self.save()
+    }
 
+    pub fn get_week_calories_and_workouts(&self) -> Vec<(NaiveDate, u32, Option<&Workout>)> {
+        let current_date = self.get_current_day().unwrap().date;
+        let week_start = current_date - chrono::Duration::days(6);
+
+        (0..7)
+            .map(|i| {
+                let date = week_start + chrono::Duration::days(i);
+                let day = self.days.iter().find(|day| day.date == date);
+                let calories = day.map(|d| d.total_calories()).unwrap_or(0);
+                let workout = day.and_then(|d| d.workout.as_ref());
+                (date, calories, workout)
+            })
+            .collect()
+    }
     pub fn calculate_bmi(&self) -> f32 {
         let height_in_meters = self.user_height / 100.0;
         self.user_weight / (height_in_meters * height_in_meters)
@@ -151,6 +183,36 @@ impl App {
                 447.593 + (9.247 * self.user_weight) + (3.098 * self.user_height)
                     - (4.330 * self.user_age as f32)
             }
+        }
+    }
+}
+
+impl Workout {
+    pub fn new(workout_type: WorkoutType, duration: u32) -> Self {
+        let calories_burnt = match workout_type {
+            WorkoutType::WeightLifting => {
+                // Estimate calories burnt for weight lifting
+                match duration {
+                    30 => 120,
+                    60 => 220,
+                    90 => 330,
+                    120 => 440,
+                    _ => (duration as f32 * 3.67).round() as u32, // Approximate for other durations
+                }
+            }
+            WorkoutType::Cardio => 0, // This will be set by the user for cardio
+        };
+
+        Self {
+            workout_type,
+            duration,
+            calories_burnt,
+        }
+    }
+
+    pub fn set_cardio_calories(&mut self, calories: u32) {
+        if self.workout_type == WorkoutType::Cardio {
+            self.calories_burnt = calories;
         }
     }
 }

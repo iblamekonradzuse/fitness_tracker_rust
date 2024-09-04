@@ -1,3 +1,4 @@
+use crate::app::Workout;
 use crate::food::Food;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -6,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct Day {
     pub date: NaiveDate,
     pub foods: Vec<Food>,
+    pub workout: Option<Workout>,
 }
 
 impl Day {
@@ -13,6 +15,7 @@ impl Day {
         Self {
             date,
             foods: Vec::new(),
+            workout: None,
         }
     }
 
@@ -32,12 +35,19 @@ impl Day {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.foods.clear();
+    pub fn add_workout(&mut self, workout: Workout) {
+        self.workout = Some(workout);
     }
-
     pub fn total_calories(&self) -> u32 {
         self.foods.iter().map(|food| food.calories()).sum()
     }
+    pub fn reset(&mut self) {
+        self.foods.clear();
+    }
+    pub fn net_calories(&self, bmr: f32) -> i32 {
+        let consumed = self.total_calories() as i32;
+        let burnt = self.workout.as_ref().map_or(0, |w| w.calories_burnt) as i32;
+        let baseline = bmr.round() as i32;
+        consumed - burnt - baseline
+    }
 }
-

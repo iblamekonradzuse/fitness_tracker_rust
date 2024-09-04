@@ -3,6 +3,5 @@ pub mod day;
 pub mod food;
 pub mod storage;
 
-pub use app::{App, AppResult, Gender};
-pub use day::Day;
+pub use app::{App, AppResult, Gender, Workout, WorkoutType};
 pub use food::Food;
