@@ -38,9 +38,15 @@ impl Day {
     pub fn add_workout(&mut self, workout: Workout) {
         self.workout = Some(workout);
     }
+
     pub fn total_calories(&self) -> u32 {
         self.foods.iter().map(|food| food.calories()).sum()
     }
+
+    pub fn total_protein(&self) -> f32 {
+        self.foods.iter().map(|food| food.protein_content()).sum()
+    }
+
     pub fn reset(&mut self) {
         self.foods.clear();
     }

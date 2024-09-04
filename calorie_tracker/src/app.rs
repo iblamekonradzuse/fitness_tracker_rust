@@ -108,20 +108,29 @@ impl App {
             .ok_or_else(|| "No days recorded".into())
     }
 
-    pub fn get_week_calories(&self) -> Vec<(NaiveDate, u32)> {
+    pub fn calculate_recommended_protein(&self, workouts_per_week: u32) -> f32 {
+        let activity_factor = match workouts_per_week {
+            0..=1 => 0.8,
+            2..=3 => 1.0,
+            4..=5 => 1.2,
+            _ => 1.4,
+        };
+
+        self.user_weight * activity_factor
+    }
+
+    pub fn get_week_protein_and_calories(&self) -> Vec<(NaiveDate, u32, f32, Option<&Workout>)> {
         let current_date = self.get_current_day().unwrap().date;
         let week_start = current_date - chrono::Duration::days(6);
 
         (0..7)
             .map(|i| {
                 let date = week_start + chrono::Duration::days(i);
-                let calories = self
-                    .days
-                    .iter()
-                    .find(|day| day.date == date)
-                    .map(|day| day.total_calories())
-                    .unwrap_or(0);
-                (date, calories)
+                let day = self.days.iter().find(|day| day.date == date);
+                let calories = day.map(|d| d.total_calories()).unwrap_or(0);
+                let protein = day.map(|d| d.total_protein()).unwrap_or(0.0);
+                let workout = day.and_then(|d| d.workout.as_ref());
+                (date, calories, protein, workout)
             })
             .collect()
     }

@@ -1,11 +1,19 @@
 [
   {
     "date": "2024-09-04",
-    "foods": [],
+    "foods": [
+      {
+        "name": "egg",
+        "protein": 8.0,
+        "fat": 1.0,
+        "carbs": 4.0,
+        "quantity": 5.0
+      }
+    ],
     "workout": {
       "workout_type": "Cardio",
       "duration": 20,
-      "calories_burnt": 200
+      "calories_burnt": 150
     }
   }
 ]

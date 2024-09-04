@@ -24,18 +24,11 @@ fn main() -> AppResult<()> {
         println!();
 
         let choices = vec![
-            "➕ Add food",
-            "➖ Remove food",
-            "💪 Add workout",
-            "🔄 Reset day",
-            "📅 Register day",
-            "📊 Show current day",
-            "🔍 Search food",
-            "📆 Change day",
-            "📈 Show week calories",
-            "👤 Set user info",
-            "📏 Calculate BMI",
-            "🔥 Calculate BMR",
+            "📅 Day Management",
+            "🍽️ Food Tracking",
+            "💪 Workout Management",
+            "📊 Statistics and Reports",
+            "👤 User Settings",
             "❌ Exit",
         ];
 
@@ -46,23 +39,135 @@ fn main() -> AppResult<()> {
             .interact()?;
 
         match selection {
-            0 => add_food(&mut app)?,
-            1 => remove_food(&mut app)?,
-            2 => add_workout(&mut app)?,
-            3 => reset_day(&mut app)?,
-            4 => register_day(&mut app)?,
-            5 => show_current_day(&app)?,
-            6 => search_food(&app)?,
-            7 => change_day(&mut app)?,
-            8 => show_week_calories(&app)?,
-            9 => set_user_info(&mut app)?,
-            10 => calculate_bmi(&app)?,
-            11 => calculate_bmr(&app)?,
-            12 => break,
+            0 => day_management_menu(&mut app)?,
+            1 => food_tracking_menu(&mut app)?,
+            2 => workout_management_menu(&mut app)?,
+            3 => statistics_menu(&app)?,
+            4 => user_settings_menu(&mut app)?,
+            5 => break,
             _ => unreachable!(),
         }
     }
 
+    Ok(())
+}
+
+fn day_management_menu(app: &mut App) -> AppResult<()> {
+    loop {
+        let choices = vec![
+            "📅 Change day",
+            "🔄 Reset day",
+            "📆 Register new day",
+            "📊 Show current day",
+            "⬅️ Back to main menu",
+        ];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Day Management")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => change_day(app)?,
+            1 => reset_day(app)?,
+            2 => register_day(app)?,
+            3 => show_current_day(app)?,
+            4 => break,
+            _ => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+fn food_tracking_menu(app: &mut App) -> AppResult<()> {
+    loop {
+        let choices = vec![
+            "➕ Add food",
+            "➖ Remove food",
+            "🔍 Search food",
+            "⬅️ Back to main menu",
+        ];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Food Tracking")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => add_food(app)?,
+            1 => remove_food(app)?,
+            2 => search_food(app)?,
+            3 => break,
+            _ => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+fn workout_management_menu(app: &mut App) -> AppResult<()> {
+    loop {
+        let choices = vec!["💪 Add workout", "📊 View workouts", "⬅️ Back to main menu"];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Workout Management")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => add_workout(app)?,
+            1 => view_workouts(app)?,
+            2 => break,
+            _ => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+fn statistics_menu(app: &App) -> AppResult<()> {
+    loop {
+        let choices = vec![
+            "📈 Show week calories",
+            "📏 Calculate BMI",
+            "🔥 Calculate BMR",
+            "⬅️ Back to main menu",
+        ];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Statistics and Reports")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => show_week_calories(app)?,
+            1 => calculate_bmi(app)?,
+            2 => calculate_bmr(app)?,
+            3 => break,
+            _ => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+fn user_settings_menu(app: &mut App) -> AppResult<()> {
+    loop {
+        let choices = vec!["👤 Set user info", "⬅️ Back to main menu"];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("User Settings")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => set_user_info(app)?,
+            1 => break,
+            _ => unreachable!(),
+        }
+    }
     Ok(())
 }
 
@@ -197,6 +302,35 @@ fn remove_food(app: &mut App) -> AppResult<()> {
     Ok(())
 }
 
+fn view_workouts(app: &App) -> AppResult<()> {
+    let day = app.get_current_day()?;
+
+    if let Some(workout) = &day.workout {
+        println!("\n{}", "💪 Today's Workout:".cyan());
+        println!(
+            "  Type: {}",
+            match workout.workout_type {
+                WorkoutType::WeightLifting => "Weight Lifting",
+                WorkoutType::Cardio => "Cardio",
+            }
+            .green()
+        );
+        println!(
+            "  Duration: {} minutes",
+            workout.duration.to_string().yellow()
+        );
+        println!(
+            "  Calories Burnt: {}",
+            workout.calories_burnt.to_string().red()
+        );
+    } else {
+        println!("\n{}", "No workout recorded for today.".yellow());
+    }
+
+    pause()?;
+    Ok(())
+}
+
 fn add_workout(app: &mut App) -> AppResult<()> {
     let workout_types = vec!["Weight Lifting", "Cardio"];
     let workout_type = Select::with_theme(&ColorfulTheme::default())
@@ -324,14 +458,19 @@ fn change_day(app: &mut App) -> AppResult<()> {
 }
 
 fn show_week_calories(app: &App) -> AppResult<()> {
-    let week_data = app.get_week_calories_and_workouts();
+    let workouts_per_week: u32 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("How many times do you work out per week?")
+        .interact_text()?;
+
+    let recommended_protein = app.calculate_recommended_protein(workouts_per_week);
+    let week_data = app.get_week_protein_and_calories();
     let bmr = app.calculate_bmr();
 
     println!(
         "\n{}",
-        "📊 Calories and workouts in the last 7 days:".cyan()
+        "📊 Calories, protein, and workouts in the last 7 days:".cyan()
     );
-    for &(date, calories, workout) in &week_data {
+    for &(date, calories, protein, workout) in &week_data {
         let net_calories =
             calories as i32 - workout.map_or(0, |w| w.calories_burnt) as i32 - bmr as i32;
         let net_calories_str = if net_calories > 0 {
@@ -341,9 +480,10 @@ fn show_week_calories(app: &App) -> AppResult<()> {
         };
 
         print!(
-            "  {} : {} calories",
+            "  {} : {} calories, {:.1}g protein",
             date.to_string().green(),
-            calories.to_string().yellow()
+            calories.to_string().yellow(),
+            protein
         );
 
         if let Some(w) = workout {
@@ -361,21 +501,38 @@ fn show_week_calories(app: &App) -> AppResult<()> {
         println!(" Net: {} calories", net_calories_str);
     }
 
-    let max_calories = week_data.iter().map(|(_, c, _)| *c).max().unwrap_or(0);
-    let scale = 50.0 / max_calories as f32;
+    let max_calories = week_data.iter().map(|(_, c, _, _)| *c).max().unwrap_or(0);
+    let max_protein = week_data
+        .iter()
+        .map(|(_, _, p, _)| *p)
+        .fold(0.0f32, |a: f32, b| a.max(b));
 
-    println!("\n{}", "📈 Week Calorie Graph:".cyan());
-    for &(date, calories, workout) in &week_data {
-        let bar_length = (calories as f32 * scale).round() as usize;
-        print!("  {} : ", date.to_string().green());
-        print!("{}", "█".repeat(bar_length).yellow());
-        print!(" {}", calories.to_string().yellow());
+    let scale_calories = 50.0 / max_calories as f32;
+    let scale_protein = 50.0 / max_protein;
 
-        if let Some(w) = workout {
-            print!(" ({})", w.calories_burnt.to_string().red());
-        }
-        println!();
+    println!("\n{}", "📈 Week Calorie and Protein Graph:".cyan());
+    for &(date, calories, protein, _) in &week_data {
+        let cal_bar_length = (calories as f32 * scale_calories).round() as usize;
+        let prot_bar_length = (protein * scale_protein).round() as usize;
+
+        println!("  {} :", date.to_string().green());
+        print!("    Calories: ");
+        print!("{}", "█".repeat(cal_bar_length).yellow());
+        println!(" {}", calories.to_string().yellow());
+
+        print!("    Protein:  ");
+        print!("{}", "█".repeat(prot_bar_length).cyan());
+        println!(" {:.1}g", protein);
     }
+
+    println!(
+        "\n{}",
+        format!(
+            "Recommended daily protein intake: {:.1}g",
+            recommended_protein
+        )
+        .magenta()
+    );
 
     pause()?;
     Ok(())

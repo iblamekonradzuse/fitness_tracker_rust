@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Food {
     pub name: String,
     pub protein: f32,
@@ -23,5 +23,8 @@ impl Food {
     pub fn calories(&self) -> u32 {
         ((self.protein * 4.0 + self.fat * 9.0 + self.carbs * 4.0) * self.quantity).round() as u32
     }
-}
 
+    pub fn protein_content(&self) -> f32 {
+        self.protein * self.quantity
+    }
+}
