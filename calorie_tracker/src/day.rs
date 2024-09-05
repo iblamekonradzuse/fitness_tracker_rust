@@ -19,7 +19,7 @@ impl Day {
         }
     }
 
-    pub fn add_food(&mut self, food: Food, quantity: f32) {
+    pub fn add_food(&mut self, food: Food, quantity: f64) {
         if let Some(existing_food) = self.foods.iter_mut().find(|f| f.name == food.name) {
             existing_food.quantity += quantity;
         } else {
@@ -39,21 +39,25 @@ impl Day {
         self.workout = Some(workout);
     }
 
-    pub fn total_calories(&self) -> u32 {
+    pub fn total_calories(&self) -> f64 {
         self.foods.iter().map(|food| food.calories()).sum()
     }
 
-    pub fn total_protein(&self) -> f32 {
+    pub fn total_protein(&self) -> f64 {
         self.foods.iter().map(|food| food.protein_content()).sum()
     }
 
     pub fn reset(&mut self) {
         self.foods.clear();
     }
-    pub fn net_calories(&self, bmr: f32) -> i32 {
-        let consumed = self.total_calories() as i32;
-        let burnt = self.workout.as_ref().map_or(0, |w| w.calories_burnt) as i32;
-        let baseline = bmr.round() as i32;
-        consumed - burnt - baseline
+
+    pub fn net_calories(&self, bmr: f64) -> f64 {
+        let consumed = self.total_calories();
+        let burnt = self
+            .workout
+            .as_ref()
+            .map_or(0.0, |w| w.calories_burnt as f64);
+        consumed - burnt - bmr
     }
 }
+

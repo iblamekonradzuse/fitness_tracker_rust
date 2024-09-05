@@ -1,3 +1,4 @@
+use crate::api;
 use crate::day::Day;
 use crate::food::Food;
 use crate::storage::{load_days, save_days};
@@ -6,8 +7,9 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use tokio::runtime::Runtime;
 
-pub type AppResult<T> = Result<T, Box<dyn Error>>;
+pub type AppResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 pub struct App {
     days: Vec<Day>,
@@ -57,7 +59,7 @@ impl App {
         })
     }
 
-    pub fn add_food(&mut self, food: Food, quantity: f32) -> AppResult<()> {
+    pub fn add_food(&mut self, food: Food, quantity: f64) -> AppResult<()> {
         self.get_current_day_mut()?.add_food(food, quantity);
         self.save()
     }
@@ -79,8 +81,44 @@ impl App {
             .collect()
     }
 
+    pub fn add_food_manually(&mut self, food: Food) -> AppResult<()> {
+        self.get_current_day_mut()?.add_food(food, 1.0);
+        self.save()
+    }
+
+    pub fn search_and_add_food(&mut self, query: &str) -> AppResult<Vec<Food>> {
+        let rt = Runtime::new()?;
+        let nutrition_info = rt.block_on(api::search_and_get_nutrition(query));
+
+        match nutrition_info {
+            Ok(info) => {
+                let mut added_foods = Vec::new();
+
+                for info in info {
+                    let food = Food::new(
+                        &info.name,
+                        info.quantity,
+                        &info.unit,
+                        info.protein,
+                        info.fat,
+                        info.carbs,
+                        info.calories,
+                    );
+                    self.add_food(food.clone(), 1.0)?;
+                    added_foods.push(food);
+                }
+
+                Ok(added_foods)
+            }
+            Err(e) => {
+                println!("API Error: {}. Falling back to manual entry.", e);
+                Ok(Vec::new())
+            }
+        }
+    }
+
     pub fn get_all_foods(&self) -> Vec<&Food> {
-        self.days.iter().flat_map(|day| day.foods.iter()).collect()
+        self.days.iter().flat_map(|day| &day.foods).collect()
     }
 
     pub fn change_day(&mut self, date: NaiveDate) -> AppResult<()> {
@@ -127,10 +165,10 @@ impl App {
             .map(|i| {
                 let date = week_start + chrono::Duration::days(i);
                 let day = self.days.iter().find(|day| day.date == date);
-                let calories = day.map(|d| d.total_calories()).unwrap_or(0);
+                let calories = day.map(|d| d.total_calories()).unwrap_or(0.0);
                 let protein = day.map(|d| d.total_protein()).unwrap_or(0.0);
                 let workout = day.and_then(|d| d.workout.as_ref());
-                (date, calories, protein, workout)
+                (date, calories as u32, protein as f32, workout)
             })
             .collect()
     }
@@ -163,7 +201,7 @@ impl App {
         self.save()
     }
 
-    pub fn get_week_calories_and_workouts(&self) -> Vec<(NaiveDate, u32, Option<&Workout>)> {
+    pub fn get_week_calories_and_workouts(&self) -> Vec<(NaiveDate, f64, Option<&Workout>)> {
         let current_date = self.get_current_day().unwrap().date;
         let week_start = current_date - chrono::Duration::days(6);
 
@@ -171,12 +209,13 @@ impl App {
             .map(|i| {
                 let date = week_start + chrono::Duration::days(i);
                 let day = self.days.iter().find(|day| day.date == date);
-                let calories = day.map(|d| d.total_calories()).unwrap_or(0);
+                let calories = day.map(|d| d.total_calories()).unwrap_or(0.0);
                 let workout = day.and_then(|d| d.workout.as_ref());
                 (date, calories, workout)
             })
             .collect()
     }
+
     pub fn calculate_bmi(&self) -> f32 {
         let height_in_meters = self.user_height / 100.0;
         self.user_weight / (height_in_meters * height_in_meters)

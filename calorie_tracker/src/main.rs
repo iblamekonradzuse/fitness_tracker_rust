@@ -3,6 +3,7 @@ use calorie_tracker::{App, AppResult, Food, Gender};
 use chrono::NaiveDate;
 use colored::*;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
+use std::cmp::min;
 
 fn main() -> AppResult<()> {
     let mut app = App::new("calories.json")?;
@@ -172,105 +173,95 @@ fn user_settings_menu(app: &mut App) -> AppResult<()> {
 }
 
 fn add_food(app: &mut App) -> AppResult<()> {
-    loop {
-        let choices = vec![
-            "🔍 Search for existing food",
-            "🆕 Enter new food",
-            "⬅️ Go back",
-        ];
-        let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Do you want to search for an existing food or enter a new one?")
-            .default(0)
-            .items(&choices)
-            .interact()?;
-
-        match selection {
-            0 => {
-                if let Some(food) = search_and_select_food(app)? {
-                    let quantity: f32 = Input::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Enter quantity consumed")
-                        .interact_text()?;
-
-                    app.add_food(food, quantity)?;
-                    println!("\n{}", "✅ Food added successfully!".green());
-                    pause()?;
-                }
-            }
-            1 => {
-                if let Some(food) = enter_new_food()? {
-                    let quantity: f32 = Input::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Enter quantity consumed")
-                        .interact_text()?;
-
-                    app.add_food(food, quantity)?;
-                    println!("\n{}", "✅ Food added successfully!".green());
-                    pause()?;
-                }
-            }
-            2 => break,
-            _ => unreachable!(),
-        }
-    }
-    Ok(())
-}
-
-fn search_and_select_food(app: &App) -> AppResult<Option<Food>> {
-    let query: String = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter food name to search")
-        .interact_text()?;
-
-    let results = app.search_food(&query);
-
-    if results.is_empty() {
-        println!("\n{}", "❌ No matching foods found.".yellow());
-        pause()?;
-        return Ok(None);
-    }
-
-    println!("\n{}", "🔍 Search results:".cyan());
-    let mut choices: Vec<String> = results
-        .iter()
-        .enumerate()
-        .map(|(i, (food, score))| format!("{}. {} (Match score: {})", i + 1, food.name, score))
-        .collect();
-    choices.push("⬅️ Go back".to_string());
+    let choices = vec![
+        "✏️ Add food manually",
+        "🌐 Search and add food from API",
+        "⬅️ Back to main menu",
+    ];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select a food or go back")
+        .with_prompt("Choose an option")
         .default(0)
         .items(&choices)
         .interact()?;
 
-    if selection == choices.len() - 1 {
-        Ok(None)
-    } else {
-        Ok(Some(results[selection].0.clone()))
+    match selection {
+        0 => add_food_manually(app),
+        1 => search_and_add_food(app),
+        2 => Ok(()),
+        _ => unreachable!(),
     }
 }
 
-fn enter_new_food() -> AppResult<Option<Food>> {
+fn add_food_manually(app: &mut App) -> AppResult<()> {
     let name: String = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter food name (or leave empty to go back)")
-        .allow_empty(true)
+        .with_prompt("Enter food name")
         .interact_text()?;
 
-    if name.is_empty() {
-        return Ok(None);
+    let quantity: f64 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter quantity (e.g., 1, 2, 0.5)")
+        .interact_text()?;
+
+    let protein: f64 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter protein content (grams)")
+        .interact_text()?;
+
+    let fat: f64 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter fat content (grams)")
+        .interact_text()?;
+
+    let carbs: f64 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter carbohydrate content (grams)")
+        .interact_text()?;
+
+    // Calculate calories
+    let calories = (protein * 4.0) + (fat * 9.0) + (carbs * 4.0);
+
+    let food = Food::new(&name, quantity, "serving", protein, fat, carbs, calories);
+    app.add_food_manually(food)?;
+
+    println!("\n{}", "✅ Food added successfully!".green());
+    pause()?;
+    Ok(())
+}
+
+fn search_and_add_food(app: &mut App) -> AppResult<()> {
+    let query: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter food and quantity (e.g., '2 apples, 200 grams of chicken') ")
+        .interact_text()?;
+
+    match app.search_and_add_food(&query) {
+        Ok(added_foods) => {
+            if added_foods.is_empty() {
+                println!("\n{}", "❌ No foods found matching the query.".yellow());
+                println!("{}", "You can try adding the food manually.".yellow());
+            } else {
+                println!("\n{}", "✅ Foods added successfully:".green());
+                for food in added_foods {
+                    println!(
+                        "  • {} {} {}",
+                        food.quantity.to_string().yellow(),
+                        food.unit.cyan(),
+                        food.name.green()
+                    );
+                    println!(
+                        "    Calories: {}, Protein: {}g, Fat: {}g, Carbs: {}g",
+                        food.calories().to_string().red(),
+                        food.protein_content().to_string().blue(),
+                        food.fat.to_string().magenta(),
+                        food.carbs.to_string().yellow()
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            println!("\n{}", format!("❌ Error adding food: {}", e).red());
+            println!("{}", "You can try adding the food manually.".yellow());
+        }
     }
 
-    let protein: f32 = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter protein (grams)")
-        .interact_text()?;
-
-    let fat: f32 = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter fat (grams)")
-        .interact_text()?;
-
-    let carbs: f32 = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter carbs (grams)")
-        .interact_text()?;
-
-    Ok(Some(Food::new(&name, protein, fat, carbs, 1.0)))
+    pause()?;
+    Ok(())
 }
 
 fn remove_food(app: &mut App) -> AppResult<()> {
@@ -394,14 +385,14 @@ fn show_current_day(app: &App) -> AppResult<()> {
     println!("\n{}", format!("📅 Current day: {}", day.date).cyan());
     println!(
         "{}",
-        format!("🔢 Total calories: {}", day.total_calories()).yellow()
+        format!("🔢 Total calories: {:.0}", day.total_calories()).yellow()
     );
     println!("\n{}", "🍽️ Foods consumed:".cyan());
     for food in &day.foods {
         println!(
-            "  • {} ({} calories)",
+            "  • {} ({:.0} calories)",
             food.name.green(),
-            food.calories().to_string().yellow()
+            food.calories()
         );
     }
     pause()?;
@@ -410,31 +401,132 @@ fn show_current_day(app: &App) -> AppResult<()> {
 
 fn search_food(app: &App) -> AppResult<()> {
     loop {
-        let query: String = Input::with_theme(&ColorfulTheme::default())
-            .with_prompt("Enter search query (or leave empty to go back)")
-            .allow_empty(true)
-            .interact_text()?;
+        let choices = vec![
+            "🍽️ Browse all foods",
+            "🔍 Search for a specific food",
+            "⬅️ Back to main menu",
+        ];
 
-        if query.is_empty() {
-            break;
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Choose an option")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        match selection {
+            0 => browse_foods(app)?,
+            1 => search_specific_food(app)?,
+            2 => break,
+            _ => unreachable!(),
         }
+    }
+    Ok(())
+}
 
-        let results = app.search_food(&query);
-        if results.is_empty() {
-            println!("\n{}", "❌ No foods found matching the query.".yellow());
-        } else {
-            println!("\n{}", "🔍 Search results:".cyan());
-            for (food, score) in results {
-                println!(
-                    "  • {} ({} calories) [Match score: {}]",
+const ITEMS_PER_PAGE: usize = 10;
+
+fn browse_foods(app: &App) -> AppResult<()> {
+    let all_foods: Vec<&Food> = app.get_all_foods();
+
+    if all_foods.is_empty() {
+        println!("\n{}", "No foods have been added yet.".yellow());
+        pause()?;
+        return Ok(());
+    }
+
+    let total_pages = (all_foods.len() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+    let mut current_page = 1;
+
+    loop {
+        print!("\x1B[2J\x1B[1;1H"); // Clear screen
+        println!("{}", "🍽️ All added foods".green().bold());
+        println!("{}", "━".repeat(30).cyan());
+
+        let start_index = (current_page - 1) * ITEMS_PER_PAGE;
+        let end_index = min(start_index + ITEMS_PER_PAGE, all_foods.len());
+
+        let mut choices: Vec<String> = all_foods[start_index..end_index]
+            .iter()
+            .enumerate()
+            .map(|(index, food)| {
+                format!(
+                    "{:<3} {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs)",
+                    index + start_index + 1,
                     food.name.green(),
-                    food.calories().to_string().yellow(),
-                    score.to_string().cyan()
-                );
+                    food.calories(),
+                    food.protein,
+                    food.fat,
+                    food.carbs
+                )
+            })
+            .collect();
+
+        println!(
+            "\n{}",
+            format!("Page {} of {}", current_page, total_pages).cyan()
+        );
+        println!("{}", "━".repeat(30).cyan());
+
+        choices.push("⬅️ Previous page".to_string());
+        choices.push("➡️ Next page".to_string());
+        choices.push("⬅️ Back to menu".to_string());
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Choose a food or an option")
+            .default(0)
+            .items(&choices)
+            .interact()?;
+
+        if selection < end_index - start_index {
+            // A food was selected
+            let selected_food = all_foods[start_index + selection];
+            println!("\n{}", "Selected food:".cyan());
+            println!(
+                "  {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs)",
+                selected_food.name.green(),
+                selected_food.calories(),
+                selected_food.protein,
+                selected_food.fat,
+                selected_food.carbs
+            );
+            pause()?;
+        } else {
+            // An option was selected
+            match selection - (end_index - start_index) {
+                0 if current_page > 1 => current_page -= 1,
+                1 if current_page < total_pages => current_page += 1,
+                2 => break,
+                _ => {}
             }
         }
-        pause()?;
     }
+
+    Ok(())
+}
+
+fn search_specific_food(app: &App) -> AppResult<()> {
+    let query: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enter search query")
+        .interact_text()?;
+
+    let results = app.search_food(&query);
+    if results.is_empty() {
+        println!("\n{}", "❌ No foods found matching the query.".yellow());
+    } else {
+        println!("\n{}", "🔍 Search results:".cyan());
+        for (food, score) in results {
+            println!(
+                "  • {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs) [Match score: {}]",
+                food.name.green(),
+                food.calories(),
+                food.protein,
+                food.fat,
+                food.carbs,
+                score.to_string().cyan()
+            );
+        }
+    }
+    pause()?;
     Ok(())
 }
 
@@ -482,10 +574,9 @@ fn show_week_calories(app: &App) -> AppResult<()> {
         print!(
             "  {} : {} calories, {:.1}g protein",
             date.to_string().green(),
-            calories.to_string().yellow(),
+            calories,
             protein
         );
-
         if let Some(w) = workout {
             print!(
                 " (Workout: {} min {})",
