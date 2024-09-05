@@ -2,6 +2,7 @@ use calorie_tracker::app::{Workout, WorkoutType};
 use calorie_tracker::{App, AppResult, Food, Gender};
 use chrono::NaiveDate;
 use colored::*;
+use core::cmp::Ordering;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::cmp::min;
 
@@ -426,7 +427,7 @@ fn search_food(app: &App) -> AppResult<()> {
 const ITEMS_PER_PAGE: usize = 10;
 
 fn browse_foods(app: &App) -> AppResult<()> {
-    let all_foods: Vec<&Food> = app.get_all_foods();
+    let mut all_foods: Vec<&Food> = app.get_all_foods();
 
     if all_foods.is_empty() {
         println!("\n{}", "No foods have been added yet.".yellow());
@@ -434,10 +435,13 @@ fn browse_foods(app: &App) -> AppResult<()> {
         return Ok(());
     }
 
+    let mut sort_order = SortOrder::Alphabetical;
     let total_pages = (all_foods.len() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
     let mut current_page = 1;
 
     loop {
+        sort_foods(&mut all_foods, sort_order);
+
         print!("\x1B[2J\x1B[1;1H"); // Clear screen
         println!("{}", "🍽️ All added foods".green().bold());
         println!("{}", "━".repeat(30).cyan());
@@ -461,14 +465,21 @@ fn browse_foods(app: &App) -> AppResult<()> {
             })
             .collect();
 
+        display_nutritional_summary(&all_foods[start_index..end_index]);
+
         println!(
             "\n{}",
-            format!("Page {} of {}", current_page, total_pages).cyan()
+            format!(
+                "Page {} of {} | Sort: {}",
+                current_page, total_pages, sort_order
+            )
+            .cyan()
         );
         println!("{}", "━".repeat(30).cyan());
 
         choices.push("⬅️ Previous page".to_string());
         choices.push("➡️ Next page".to_string());
+        choices.push("🔄 Change sort order".to_string());
         choices.push("⬅️ Back to menu".to_string());
 
         let selection = Select::with_theme(&ColorfulTheme::default())
@@ -495,13 +506,86 @@ fn browse_foods(app: &App) -> AppResult<()> {
             match selection - (end_index - start_index) {
                 0 if current_page > 1 => current_page -= 1,
                 1 if current_page < total_pages => current_page += 1,
-                2 => break,
+                2 => sort_order = change_sort_order()?,
+                3 => break,
                 _ => {}
             }
         }
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SortOrder {
+    Alphabetical,
+    Calories,
+    Protein,
+    Fat,
+    Carbs,
+}
+
+impl std::fmt::Display for SortOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortOrder::Alphabetical => write!(f, "Alphabetical"),
+            SortOrder::Calories => write!(f, "Calories"),
+            SortOrder::Protein => write!(f, "Protein"),
+            SortOrder::Fat => write!(f, "Fat"),
+            SortOrder::Carbs => write!(f, "Carbs"),
+        }
+    }
+}
+
+fn sort_foods(foods: &mut [&Food], order: SortOrder) {
+    foods.sort_by(|a, b| match order {
+        SortOrder::Alphabetical => a.name.cmp(&b.name),
+        SortOrder::Calories => b
+            .calories()
+            .partial_cmp(&a.calories())
+            .unwrap_or(Ordering::Equal),
+        SortOrder::Protein => b.protein.partial_cmp(&a.protein).unwrap_or(Ordering::Equal),
+        SortOrder::Fat => b.fat.partial_cmp(&a.fat).unwrap_or(Ordering::Equal),
+        SortOrder::Carbs => b.carbs.partial_cmp(&a.carbs).unwrap_or(Ordering::Equal),
+    });
+}
+
+fn change_sort_order() -> AppResult<SortOrder> {
+    let choices = vec![
+        "Alphabetical",
+        "Calories (highest first)",
+        "Protein (highest first)",
+        "Fat (highest first)",
+        "Carbs (highest first)",
+    ];
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select sort order")
+        .default(0)
+        .items(&choices)
+        .interact()?;
+
+    Ok(match selection {
+        0 => SortOrder::Alphabetical,
+        1 => SortOrder::Calories,
+        2 => SortOrder::Protein,
+        3 => SortOrder::Fat,
+        4 => SortOrder::Carbs,
+        _ => unreachable!(),
+    })
+}
+
+fn display_nutritional_summary(foods: &[&Food]) {
+    let total_calories: f64 = foods.iter().map(|f| f.calories()).sum();
+    let total_protein: f64 = foods.iter().map(|f| f.protein).sum();
+    let total_fat: f64 = foods.iter().map(|f| f.fat).sum();
+    let total_carbs: f64 = foods.iter().map(|f| f.carbs).sum();
+
+    println!("\n{}", "Nutritional Summary (this page):".cyan());
+    println!("  Total Calories: {:.0}", total_calories);
+    println!("  Total Protein: {:.1}g", total_protein);
+    println!("  Total Fat: {:.1}g", total_fat);
+    println!("  Total Carbs: {:.1}g", total_carbs);
 }
 
 fn search_specific_food(app: &App) -> AppResult<()> {
