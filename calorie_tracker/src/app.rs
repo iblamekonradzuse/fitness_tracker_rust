@@ -69,14 +69,14 @@ impl App {
         self.save()
     }
 
-    pub fn search_food(&self, query: &str) -> Vec<(&Food, i64)> {
+    pub fn search_food(&self, query: &str) -> Vec<(Food, i64)> {
         self.days
             .iter()
             .flat_map(|day| day.foods.iter())
             .filter_map(|food| {
                 self.matcher
                     .fuzzy_match(&food.name, query)
-                    .map(|score| (food, score))
+                    .map(|score| (food.clone(), score))
             })
             .collect()
     }

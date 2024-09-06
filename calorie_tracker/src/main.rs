@@ -82,32 +82,6 @@ fn day_management_menu(app: &mut App) -> AppResult<()> {
     Ok(())
 }
 
-fn food_tracking_menu(app: &mut App) -> AppResult<()> {
-    loop {
-        let choices = vec![
-            "➕ Add food",
-            "➖ Remove food",
-            "🔍 Search food",
-            "⬅️ Back to main menu",
-        ];
-
-        let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Food Tracking")
-            .default(0)
-            .items(&choices)
-            .interact()?;
-
-        match selection {
-            0 => add_food(app)?,
-            1 => remove_food(app)?,
-            2 => search_food(app)?,
-            3 => break,
-            _ => unreachable!(),
-        }
-    }
-    Ok(())
-}
-
 fn workout_management_menu(app: &mut App) -> AppResult<()> {
     loop {
         let choices = vec!["💪 Add workout", "📊 View workouts", "⬅️ Back to main menu"];
@@ -400,24 +374,45 @@ fn show_current_day(app: &App) -> AppResult<()> {
     Ok(())
 }
 
-fn search_food(app: &App) -> AppResult<()> {
+fn food_tracking_menu(app: &mut App) -> AppResult<()> {
     loop {
         let choices = vec![
-            "🍽️ Browse all foods",
-            "🔍 Search for a specific food",
+            "➕ Add food",
+            "➖ Remove food",
+            "🔍 Search food",
             "⬅️ Back to main menu",
         ];
 
         let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Choose an option")
+            .with_prompt("Food Tracking")
             .default(0)
             .items(&choices)
             .interact()?;
 
         match selection {
-            0 => browse_foods(app)?,
-            1 => search_specific_food(app)?,
-            2 => break,
+            0 => add_food(app)?,
+            1 => remove_food(app)?,
+            2 => {
+                let search_choices = vec![
+                    "🍽️ Browse all foods",
+                    "🔍 Search for a specific food",
+                    "⬅️ Back to menu",
+                ];
+
+                let search_selection = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Choose an option")
+                    .default(0)
+                    .items(&search_choices)
+                    .interact()?;
+
+                match search_selection {
+                    0 => browse_foods(app)?,
+                    1 => search_specific_food(app)?,
+                    2 => continue,
+                    _ => unreachable!(),
+                }
+            }
+            3 => break,
             _ => unreachable!(),
         }
     }
@@ -426,8 +421,8 @@ fn search_food(app: &App) -> AppResult<()> {
 
 const ITEMS_PER_PAGE: usize = 10;
 
-fn browse_foods(app: &App) -> AppResult<()> {
-    let mut all_foods: Vec<&Food> = app.get_all_foods();
+fn browse_foods(app: &mut App) -> AppResult<()> {
+    let all_foods: Vec<Food> = app.get_all_foods().into_iter().cloned().collect();
 
     if all_foods.is_empty() {
         println!("\n{}", "No foods have been added yet.".yellow());
@@ -440,19 +435,21 @@ fn browse_foods(app: &App) -> AppResult<()> {
     let mut current_page = 1;
 
     loop {
-        sort_foods(&mut all_foods, sort_order);
+        let mut sorted_indices: Vec<usize> = (0..all_foods.len()).collect();
+        sort_foods_by_index(&all_foods, &mut sorted_indices, sort_order);
 
         print!("\x1B[2J\x1B[1;1H"); // Clear screen
         println!("{}", "🍽️ All added foods".green().bold());
         println!("{}", "━".repeat(30).cyan());
 
         let start_index = (current_page - 1) * ITEMS_PER_PAGE;
-        let end_index = min(start_index + ITEMS_PER_PAGE, all_foods.len());
+        let end_index = min(start_index + ITEMS_PER_PAGE, sorted_indices.len());
 
-        let mut choices: Vec<String> = all_foods[start_index..end_index]
+        let mut choices: Vec<String> = sorted_indices[start_index..end_index]
             .iter()
             .enumerate()
-            .map(|(index, food)| {
+            .map(|(index, &food_index)| {
+                let food = &all_foods[food_index];
                 format!(
                     "{:<3} {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs)",
                     index + start_index + 1,
@@ -465,7 +462,12 @@ fn browse_foods(app: &App) -> AppResult<()> {
             })
             .collect();
 
-        display_nutritional_summary(&all_foods[start_index..end_index]);
+        display_nutritional_summary(
+            &sorted_indices[start_index..end_index]
+                .iter()
+                .map(|&i| &all_foods[i])
+                .collect::<Vec<_>>(),
+        );
 
         println!(
             "\n{}",
@@ -490,7 +492,7 @@ fn browse_foods(app: &App) -> AppResult<()> {
 
         if selection < end_index - start_index {
             // A food was selected
-            let selected_food = all_foods[start_index + selection];
+            let selected_food = all_foods[sorted_indices[start_index + selection]].clone();
             println!("\n{}", "Selected food:".cyan());
             println!(
                 "  {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs)",
@@ -500,6 +502,16 @@ fn browse_foods(app: &App) -> AppResult<()> {
                 selected_food.fat,
                 selected_food.carbs
             );
+
+            // Ask for quantity
+            let quantity: f64 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt(&format!("Enter quantity of {} to add", selected_food.name))
+                .default(1.0)
+                .interact_text()?;
+
+            // Add the food with the specified quantity
+            app.add_food(selected_food, quantity)?;
+            println!("\n{}", "✅ Food added successfully!".green());
             pause()?;
         } else {
             // An option was selected
@@ -514,6 +526,28 @@ fn browse_foods(app: &App) -> AppResult<()> {
     }
 
     Ok(())
+}
+
+fn sort_foods_by_index(foods: &[Food], indices: &mut [usize], order: SortOrder) {
+    indices.sort_by(|&a, &b| match order {
+        SortOrder::Alphabetical => foods[a].name.cmp(&foods[b].name),
+        SortOrder::Calories => foods[b]
+            .calories()
+            .partial_cmp(&foods[a].calories())
+            .unwrap_or(Ordering::Equal),
+        SortOrder::Protein => foods[b]
+            .protein
+            .partial_cmp(&foods[a].protein)
+            .unwrap_or(Ordering::Equal),
+        SortOrder::Fat => foods[b]
+            .fat
+            .partial_cmp(&foods[a].fat)
+            .unwrap_or(Ordering::Equal),
+        SortOrder::Carbs => foods[b]
+            .carbs
+            .partial_cmp(&foods[a].carbs)
+            .unwrap_or(Ordering::Equal),
+    });
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -535,19 +569,6 @@ impl std::fmt::Display for SortOrder {
             SortOrder::Carbs => write!(f, "Carbs"),
         }
     }
-}
-
-fn sort_foods(foods: &mut [&Food], order: SortOrder) {
-    foods.sort_by(|a, b| match order {
-        SortOrder::Alphabetical => a.name.cmp(&b.name),
-        SortOrder::Calories => b
-            .calories()
-            .partial_cmp(&a.calories())
-            .unwrap_or(Ordering::Equal),
-        SortOrder::Protein => b.protein.partial_cmp(&a.protein).unwrap_or(Ordering::Equal),
-        SortOrder::Fat => b.fat.partial_cmp(&a.fat).unwrap_or(Ordering::Equal),
-        SortOrder::Carbs => b.carbs.partial_cmp(&a.carbs).unwrap_or(Ordering::Equal),
-    });
 }
 
 fn change_sort_order() -> AppResult<SortOrder> {
@@ -588,29 +609,61 @@ fn display_nutritional_summary(foods: &[&Food]) {
     println!("  Total Carbs: {:.1}g", total_carbs);
 }
 
-fn search_specific_food(app: &App) -> AppResult<()> {
+fn search_specific_food(app: &mut App) -> AppResult<()> {
     let query: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Enter search query")
         .interact_text()?;
 
-    let results = app.search_food(&query);
+    let results: Vec<(Food, i64)> = app
+        .search_food(&query)
+        .into_iter()
+        .map(|(food, score)| (food.clone(), score))
+        .collect();
+
     if results.is_empty() {
         println!("\n{}", "❌ No foods found matching the query.".yellow());
     } else {
         println!("\n{}", "🔍 Search results:".cyan());
-        for (food, score) in results {
-            println!(
-                "  • {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs) [Match score: {}]",
-                food.name.green(),
-                food.calories(),
-                food.protein,
-                food.fat,
-                food.carbs,
-                score.to_string().cyan()
-            );
+        loop {
+            let mut choices: Vec<String> = results
+                .iter()
+                .enumerate()
+                .map(|(index, (food, score))| {
+                    format!(
+                        "{:<3} {} ({:.0} calories, {:.1}g protein, {:.1}g fat, {:.1}g carbs) [Match score: {}]",
+                        index + 1,
+                        food.name.green(),
+                        food.calories(),
+                        food.protein,
+                        food.fat,
+                        food.carbs,
+                        score.to_string().cyan()
+                    )
+                })
+                .collect();
+
+            choices.push("⬅️ Back to menu".to_string());
+
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select a food to add or go back")
+                .default(0)
+                .items(&choices)
+                .interact()?;
+
+            if selection == choices.len() - 1 {
+                break;
+            } else {
+                let selected_food = results[selection].0.clone();
+                let quantity: f64 = Input::with_theme(&ColorfulTheme::default())
+                    .with_prompt(&format!("Enter quantity of {} to add", selected_food.name))
+                    .default(1.0)
+                    .interact_text()?;
+
+                app.add_food(selected_food, quantity)?;
+                println!("\n{}", "✅ Food added successfully!".green());
+            }
         }
     }
-    pause()?;
     Ok(())
 }
 
